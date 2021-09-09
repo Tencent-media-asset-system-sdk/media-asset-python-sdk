@@ -349,7 +349,7 @@ class MediaAsset(object):
         block_Size = 32 * 1024 * 1024
         number = int(file_size / block_Size) + 1
 
-        coroutine_num = 16
+        coroutine_num = 4
         if number < coroutine_num:
             coroutine_num = number
 
