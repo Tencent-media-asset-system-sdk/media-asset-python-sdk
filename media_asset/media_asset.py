@@ -16,7 +16,7 @@ from .tisign.sign import *
 
 class MediaResponse(object):
     def __init__(self, data):
-        self.request_id = data["RequestID"]
+        self.request_id = data.get("RequestID", "")
         self.code = "ok"
         self.message = "success"
         if "Error" in data:
@@ -89,23 +89,23 @@ class FailedMediaInfo(object):
 
 class MediaInfoSet(object):
     def __init__(self, data):
-        self.media_id = data["MediaID"]
-        self.name = data["Name"]
-        self.duration = data["Duration"]
-        self.size = data["Size"]
-        self.width = data["Width"]
-        self.height = data["Height"]
-        self.fps = data["FPS"]
-        self.bit_rate = data["BitRate"]
-        self.format = data["Format"]
-        self.download_url = data["DownLoadURL"]
-        self.failed_reason = data["FailedReason"]
-        self.status = data["Status"]
+        self.media_id = data.get("MediaID", 0)
+        self.name = data.get("Name", "")
+        self.duration = data.get("Duration", 0)
+        self.size = data.get("Size", 0)
+        self.width = data.get("Width", 0)
+        self.height = data.get("Height", 0)
+        self.fps = data.get("FPS", 0)
+        self.bit_rate = data.get("BitRate", 0)
+        self.format = data.get("Format", "")
+        self.download_url = data.get("DownLoadURL", "")
+        self.failed_reason = data.get("FailedReason", "")
+        self.status = data.get("Status", "")
 
-        self.media_type = data["MediaType"]
-        self.media_tag = data["MediaTag"]
-        self.media_second_tag = data["MediaSecondTag"]
-        self.media_lang = data["MediaLang"]
+        self.media_type = data.get("MediaType", "")
+        self.media_tag = data.get("MediaTag", "")
+        self.media_second_tag = data.get("MediaSecondTag", "")
+        self.media_lang = data.get("MediaLang", "")
 
 
 @retry(stop_max_attempt_number=3)
@@ -279,15 +279,18 @@ class MediaAsset(object):
             return None, None, response_err
 
         category = []
+        lang = []
+        label = []
         for v in resp["Response"]["CategorySet"]:
             category.append(Category(v))
-        label = []
         for v in resp["Response"]["LabelSet"]:
             label.append(Label(v))
-        return category, label, response_err
+        for v in resp["Response"]["LangSet"]:
+            lang.append(v)
+        return category, label, lang, response_err
 
-    # modify_Media 修改媒体信息
-    def modify_Media(self, media_id, media_tag, media_second_tag):
+    # modify_media 修改媒体信息
+    def modify_media(self, media_id, media_tag, media_second_tag):
         req = {
             "TIBusinessID": self.media_config.business,
             "TIProjectID": self.media_config.project,
@@ -342,58 +345,116 @@ class MediaAsset(object):
         return resp["Response"], response_err
 
     def do_upload(self, file_path, file_size, media_msg):
-        ts = TiSign(self.media_config.host,
-                    "UploadPart",
-                    self.media_config.version,
-                    self.media_config.service,
-                    "application/octet-stream",
-                    'PUT',
-                    self.media_config.secret_id,
-                    self.media_config.secret_key)
-
-        http_header_dict, authorization = ts.build_header_with_signature()
 
         block_Size = 32 * 1024 * 1024
         number = int(file_size / block_Size) + 1
 
-        coroutine_num = 8
+        coroutine_num = 16
         if number < coroutine_num:
             coroutine_num = number
 
         req_list = []
         f = open(file_path, "rb")
-        for i in range(number):
 
-            if i + 1 == number:
-                data = f.read(file_size % block_Size)
-                query = "useJson=true&Bucket={}&Key={}&uploadId={}&partNumber={}&Content-MD5={}".format(
-                    media_msg["Bucket"], media_msg["Key"], media_msg["UploadId"], i + 1, get_md5(data))
-                url = "http://{}:{}/FileManager/UploadPart?{}".format(self.media_config.host, self.media_config.port,
-                                                                      query)
-                req_list.append(grequests.put(url=url, headers=http_header_dict, data=data))
-            elif i + 1 % coroutine_num == 0:
-                data = f.read(block_Size)
-                query = "useJson=true&Bucket={}&Key={}&uploadId={}&partNumber={}&Content-MD5={}".format(
-                    media_msg["Bucket"], media_msg["Key"], media_msg["UploadId"], i + 1, get_md5(data))
-                url = "http://{}:{}/FileManager/UploadPart?{}".format(self.media_config.host, self.media_config.port,
-                                                                      query)
-                req_list.append(grequests.put(url=url, headers=http_header_dict, data=data))
-            else:
-                data = f.read(block_Size)
-                query = "useJson=true&Bucket={}&Key={}&uploadId={}&partNumber={}&Content-MD5={}".format(
-                    media_msg["Bucket"], media_msg["Key"], media_msg["UploadId"], i + 1, get_md5(data))
-                url = "http://{}:{}/FileManager/UploadPart?{}".format(self.media_config.host, self.media_config.port,
-                                                                      query)
-                req_list.append(grequests.put(url=url, headers=http_header_dict, data=data))
-                continue
+        if file_size < block_Size:
+            ts = TiSign(self.media_config.host,
+              "PutObject",
+              self.media_config.version,
+              self.media_config.service,
+              "application/octet-stream",
+              'PUT',
+              self.media_config.secret_id,
+              self.media_config.secret_key)
+            filebuf = f.read()
+            query = "useJson=true&Bucket={}&Key={}&Content-MD5={}".format(
+                        media_msg["Bucket"], media_msg["Key"], get_md5(filebuf))
+            url = "http://{}:{}/FileManager/PutObject?{}".format(self.media_config.host, self.media_config.port,
+                                                                          query)
+            http_header_dict, authorization = ts.build_header_with_signature()
+            
+            try_times = 5
+            sleep_time = 0.05
+            while try_times > 0:
+                response_err = MediaResponse({"RequestID": "", "Error": {"Code": "ok", "Message": ""}})
+                resp = requests.put(url=url, headers=http_header_dict, data=filebuf)
+                if resp.status_code == 200:
+                    dic = json.loads(resp.text)
+                    response_err = MediaResponse(dic["Response"])
+                    if response_err.code == "ok":
+                        return response_err
+                    else:
+                        response_err = MediaResponse({"RequestID": "", "Error": {"Code": response_err.code, "Message": resp.text}})
+                else:
+                    response_err = MediaResponse({"RequestID": "", "Error": {"Code": "http put failed", "Message": resp.status}})
+                try_times -= 1
+                time.sleep(sleep_time)
+                sleep_time *= 2
+                
+            return response_err
+        else:
+            ts = TiSign(self.media_config.host,
+              "UploadPart",
+              self.media_config.version,
+              self.media_config.service,
+              "application/octet-stream",
+              'PUT',
+              self.media_config.secret_id,
+              self.media_config.secret_key)
+            for i in range(number):
+                http_header_dict, authorization = ts.build_header_with_signature()
+                if i + 1 == number:
+                    data = f.read(file_size % block_Size)
+                    query = "useJson=true&Bucket={}&Key={}&uploadId={}&partNumber={}&Content-MD5={}".format(
+                        media_msg["Bucket"], media_msg["Key"], media_msg["UploadId"], i + 1, get_md5(data))
+                    url = "http://{}:{}/FileManager/UploadPart?{}".format(self.media_config.host, self.media_config.port,
+                                                                          query)
+                    req_list.append(grequests.put(url=url, headers=http_header_dict, data=data))
+                elif (i + 1) % coroutine_num == 0:
+                    data = f.read(block_Size)
+                    query = "useJson=true&Bucket={}&Key={}&uploadId={}&partNumber={}&Content-MD5={}".format(
+                        media_msg["Bucket"], media_msg["Key"], media_msg["UploadId"], i + 1, get_md5(data))
+                    url = "http://{}:{}/FileManager/UploadPart?{}".format(self.media_config.host, self.media_config.port,
+                                                                          query)
+                    req_list.append(grequests.put(url=url, headers=http_header_dict, data=data))
+                else:
+                    data = f.read(block_Size)
+                    query = "useJson=true&Bucket={}&Key={}&uploadId={}&partNumber={}&Content-MD5={}".format(
+                        media_msg["Bucket"], media_msg["Key"], media_msg["UploadId"], i + 1, get_md5(data))
+                    url = "http://{}:{}/FileManager/UploadPart?{}".format(self.media_config.host, self.media_config.port,
+                                                                          query)
 
-            res_list = grequests.map(req_list)
-            for res in res_list:
-                if res.status_code != 200:
-                    return MediaResponse(
-                        {"RequestID": "", "Error": {"Code": str(res.status_code), "Message": "http failed"}})
-            req_list = []
+                    req_list.append(grequests.put(url=url, headers=http_header_dict, data=data))
+                    continue
+                try_times = 5
+                sleep_time = 0.05
+                while try_times > 0:
+                    res_list = grequests.map(req_list)
+                    new_req_list = []
+                    new_res_list = []
+                    for i in range(len(req_list)):
+                        if res_list[i].status_code != 200:
+                          new_req_list.append(req_list[i])
+                          new_res_list.append(res_list[i])
+                        else:
+                          dic = json.loads(res_list[i].text)
+                          response_err = MediaResponse(dic["Response"])
+                          if response_err.code != "ok":
+                            new_req_list.append(req_list[i])
+                            new_res_list.append(res_list[i])
+                    req_list = new_req_list
+                    res_list = new_res_list
+                    if len(req_list) == 0:
+                      break
+                    try_times -= 1
+                    time.sleep(sleep_time)
+                    sleep_time *= 2
 
+                if len(req_list) != 0:
+                  if res_list[0].status_code != 200:
+                    dic = json.loads(res_list[0].text)
+                    return MediaResponse(dic["Response"])
+                  else:
+                    return MediaResponse({"RequestID": "", "Error": {"Code": "http put failed", "Message": res_list[0].status}})
         return MediaResponse({"RequestID": "", "Error": {"Code": "ok", "Message": "http failed"}})
 
     def commit_upload(self, media_msg):
