@@ -11,7 +11,7 @@ pip install -r requirements.txt
 所有的方法都封装在 `media_asset.media_asset.MediaAsset`。构造一个`MediaAsset`的方法如下
 
 ```python
-mport sys
+import sys
 
 sys.path.append(".")
 from media_asset.media_asset import *
@@ -32,7 +32,6 @@ media_asset = MediaAsset(config)
 
 ## 获取支持媒体列表
 ```python
-
 # class Category(object):
 #     def __init__(self, data):
 #         self.type = data["Type"]
@@ -108,7 +107,7 @@ print(response_err.code)
 ```
 
 ## 修改媒体过期时间
-```pyton
+```python
 response_err = media_asset.modify_expire_time(media_info.media_id, 1)
 print(response_err.code)
 ```
