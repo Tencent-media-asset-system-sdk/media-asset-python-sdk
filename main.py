@@ -47,7 +47,12 @@ print(len(content), ' ', response_err.code)
 # 获取媒体上传列表
 page_number = 1
 page_size = 5
-filter_by = FilterBy("测试", ["视频"], ["新闻"], ["上传完成"]) # 筛选参数
+label = {
+  "Type": "视频",
+  "Tag": "新闻",
+  "SecondTagSet": [""]
+}
+filter_by = FilterBy("", ["视频"], [label], []) # 筛选参数
 media_infos, total, response_err = media_asset.describe_medias(page_number, page_size, filter_by)
 print(media_infos, total, response_err.code)
 
