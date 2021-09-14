@@ -117,3 +117,20 @@ print(response_err.code)
 response_err = media_asset.modify_expire_time(media_info.media_id, 1)
 print(response_err.code)
 ```
+
+## 批量创建媒体
+```python
+# 通过url创建媒体
+medias = []
+name = "URL视频" # 媒体名字
+local_path = "" # 媒体在服务器上的路径，不是用本地路径传入空
+media_url = "https://ai-media-1300074211.cos.ap-shanghai.myqcloud.com/ai-media/2021-04-06/8b46057e-1923-4444-b0fb-91b094bf7530_trans.mp4" # 网路地址
+media_meta = MediaMeta("视频", "新闻", "", "普通话") # 媒体信息
+md5 = "" # md5，不使用传空
+medias.append(UploadMedia(name, local_path, media_url, media_meta, md5))
+medias, response_err = media_asset.create_medias(medias)
+if response_err.code == "ok":
+    print(json.dumps([m.to_map() for m in medias], indent=4))
+else:
+    print(response_err.code)
+```

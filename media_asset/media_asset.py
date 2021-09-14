@@ -86,6 +86,36 @@ class FailedMediaInfo(object):
         self.type = data["MediaID"]
         self.failed_reason = data["FailedReason"]
 
+class UploadMedia(object):
+    def __init__(self, name, local_path, media_url, media_meta, md5):
+        self.name = name # 名字
+        self.local_path = local_path # 服务器路径，不是用本地路径传入空
+        self.media_url = media_url # 网路地址
+        self.media_meta = media_meta # 媒体信息
+        self.md5 = md5 # md5，不使用传空
+
+    def to_map(self):
+        return {
+            "Name": self.name,
+            "LocalPath": self.local_path,
+            "MediaURL": self.media_url,
+            "MediaMeta": self.media_meta.to_map(),
+            "ContentMD5": self.md5
+        }
+    
+    def to_json(self):
+        return json.dumps(self.to_map)
+
+class UploadMediaInfo(object):
+    def __init__(self, data):
+        self.media_id = data["MediaID"]
+        self.failed_reason = data["FailedReason"]
+    
+    def to_map(self):
+        return {
+            "MediaID": self.media_id,
+            "FailedReason": self.failed_reason
+        }
 
 class MediaInfoSet(object):
     def __init__(self, data):
@@ -332,7 +362,9 @@ class MediaAsset(object):
             "Inner": False,
             "Action": "ApplyUpload"
         }
-
+        block_Size = 32 * 1024 * 1024
+        if file_size < block_Size:
+            req["UsePutObject"] = 1
         http_header_dict, authorization = self.__get_header__("ApplyUpload")
         resp, err = post_http(http_header_dict, self.url, req)
         if err is not None:
@@ -474,6 +506,23 @@ class MediaAsset(object):
             return MediaResponse(resp["Response"])
         return err
 
+    # upload_medias array of UploadMedia
+    def create_medias(self, upload_medias):
+        req = {
+            "TIBusinessID": self.media_config.business,
+            "TIProjectID": self.media_config.project,
+            "UploadMediaSet": [media.to_map() for media in upload_medias]
+        }
+
+        http_header_dict, authorization = self.__get_header__("CreateMedias")
+        resp, err = post_http(http_header_dict, self.url, req)
+        if err is None:
+            media_infos = []
+            for v in resp["Response"]["UploadMediaInfoSet"]:
+                media_infos.append(UploadMediaInfo(v))
+            return media_infos, MediaResponse(resp["Response"])
+        return None, err
+    
     # upload_file 通过媒体信息返回的url下载文件到本地
     def upload_file(self, file_path, media_name, media_meta):
 
