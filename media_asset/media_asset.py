@@ -3,6 +3,7 @@
 
 import os
 import json
+import enum
 import hashlib
 import requests
 import grequests
@@ -13,6 +14,61 @@ import sys
 sys.path.append(".")
 from .tisign.sign import *
 
+class MediaState(enum.Enum):
+  UPLOADING = "上传中"
+  WAITINGVERIFY = "等待验证"
+  COMPLETED = "上传完成"
+  FAILED = "上传失败"
+  DOWNLOADING = "下载素材中"
+  VERIFYING = "验证素材中"
+  DELETED = "素材已删除"
+  CLEANED = "素材已清理"
+  
+  @classmethod
+  def contains_value(cls, v):     # 判断是否包含某个值
+    return v in cls._value2member_map_
+
+class MediaLang(enum.Enum):
+  MANDARIN = "普通话"
+  CANTONESE = "粤语"
+  
+  @classmethod
+  def contains_value(cls, v):     # 判断是否包含某个值
+    return v in cls._value2member_map_
+
+
+class MediaSecondTag(enum.Enum):
+  EVENING = "晚会"
+  OTHER = "其他"
+  
+  @classmethod
+  def contains_value(cls, v):     # 判断是否包含某个值
+    return v in cls._value2member_map_
+
+class MediaTag(enum.Enum):
+  NEWS = "新闻"
+  ENTERTAINNENT = "综艺"
+  INTERNETINFO = "互联网资讯"
+  MOVIE = "电影"
+  SERIES = "电视剧"
+  SPECIAL = "专题"
+  SPORT = "体育"
+  
+  @classmethod
+  def contains_value(cls, v):     # 判断是否包含某个值
+    return v in cls._value2member_map_
+
+
+class MediaType(enum.Enum):
+  VIDEO = "视频"
+  LIVE = "直播流"
+  IMAGE = "图片"
+  AUDIO = "音频"
+  TEXT = "文稿"
+  
+  @classmethod
+  def contains_value(cls, v):     # 判断是否包含某个值
+    return v in cls._value2member_map_
 
 class MediaResponse(object):
     def __init__(self, data):
@@ -549,3 +605,14 @@ class MediaAsset(object):
             return None, err
 
         return media_info[0], err
+
+    # check_status_failed 检查媒体状态是否失败
+    @staticmethod 
+    def check_status_failed(state):
+      return state == MediaState.FAILED.value or state == MediaState.DELETED.value or \
+        state == MediaState.CLEANED.value
+    
+    # check_status_success 检查媒体状态是否成功
+    @staticmethod
+    def check_status_success(state):
+      return state == MediaState.COMPLETED.value
